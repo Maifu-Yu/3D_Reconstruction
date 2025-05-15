@@ -17,6 +17,7 @@ import cv2
 # name_channels要check一下
 def cziknife(czi_path, output_dir, num_channels=3, name_channels=["FAM", "Cy3", "DAPI"], scale=0.1):  # If num_channels is not 3 or name_channels is wrong, you must figure it out and set it.
     os.makedirs(output_dir, exist_ok=True)
+
     # 最多支持6个channels，后续可以优化
     global global_min_0, global_max_0, global_min_1, global_max_1, global_min_2, global_max_2, global_min_3, global_max_3, global_min_4, global_max_4, global_min_5, global_max_5
     global_min_0 = 255
@@ -87,7 +88,7 @@ def cziknife(czi_path, output_dir, num_channels=3, name_channels=["FAM", "Cy3", 
             for cnt in contours:
                 x, y, w, h = cv2.boundingRect(cnt)
                 # 忽略面积过小的轮廓（噪声）
-                if w*h < 100*100:
+                if w*h < 700*700:  # 700*700是一个经验值，可能需要根据实际情况调整
                     continue
                 slice_bboxes.append((x, y, w, h))
             # 若需预先尝试使用CZI内部场景(ROI)信息，可用 czi.get_all_mosaic_scene_bounding_boxes() 代替手工分割&#8203;:contentReference[oaicite:5]{index=5}。
@@ -115,41 +116,55 @@ def cziknife(czi_path, output_dir, num_channels=3, name_channels=["FAM", "Cy3", 
                     #rate = scale/0.05
                     
                     norm_slice = img_c[y:y+h, x:x+w].astype(np.float32)
-                    '''
+                    
                     # 归一化到0-255并转为uint8(自身归一化)
-                    norm_slice = cv2.normalize(norm_slice, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
-                    norm_slice = norm_slice.astype(np.uint8)
-                    '''
+                    norm_slice_single = cv2.normalize(norm_slice, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX)
+                    norm_slice_single = norm_slice_single.astype(np.uint8)
+                    
                     # 用全局范围归一化到0-255
                     if c == 0:
-                        norm_slice = (norm_slice - global_min_0) / (global_max_0 - global_min_0) * 255
-                        norm_slice = np.clip(norm_slice, 0, 255).astype(np.uint8)
+                        norm_slice_global = (norm_slice - global_min_0) / (global_max_0 - global_min_0) * 255
+                        norm_slice_global = np.clip(norm_slice_global, 0, 255).astype(np.uint8)
                     elif c == 1:
-                        norm_slice = (norm_slice - global_min_1) / (global_max_1 - global_min_1) * 255
-                        norm_slice = np.clip(norm_slice, 0, 255).astype(np.uint8)
+                        norm_slice_global = (norm_slice - global_min_1) / (global_max_1 - global_min_1) * 255
+                        norm_slice_global = np.clip(norm_slice_global, 0, 255).astype(np.uint8)
                     elif c == 2:
-                        norm_slice = (norm_slice - global_min_2) / (global_max_2 - global_min_2) * 255
-                        norm_slice = np.clip(norm_slice, 0, 255).astype(np.uint8)
+                        norm_slice_global = (norm_slice - global_min_2) / (global_max_2 - global_min_2) * 255
+                        norm_slice_global = np.clip(norm_slice_global, 0, 255).astype(np.uint8)
                     elif c == 3:
-                        norm_slice = (norm_slice - global_min_3) / (global_max_3 - global_min_3) * 255
-                        norm_slice = np.clip(norm_slice, 0, 255).astype(np.uint8)
+                        norm_slice_global = (norm_slice - global_min_3) / (global_max_3 - global_min_3) * 255
+                        norm_slice_global = np.clip(norm_slice_global, 0, 255).astype(np.uint8)
                     elif c == 4:
-                        norm_slice = (norm_slice - global_min_4) / (global_max_4 - global_min_4) * 255
-                        norm_slice = np.clip(norm_slice, 0, 255).astype(np.uint8)
+                        norm_slice_global = (norm_slice - global_min_4) / (global_max_4 - global_min_4) * 255
+                        norm_slice_global = np.clip(norm_slice_global, 0, 255).astype(np.uint8)
                     elif c == 5:
-                        norm_slice = (norm_slice - global_min_5) / (global_max_5 - global_min_5) * 255
-                        norm_slice = np.clip(norm_slice, 0, 255).astype(np.uint8)
+                        norm_slice_global = (norm_slice - global_min_5) / (global_max_5 - global_min_5) * 255
+                        norm_slice_global = np.clip(norm_slice_global, 0, 255).astype(np.uint8)
+
+                    resized_global = norm_slice_global
+                    resized_single = norm_slice_single
 
                     # 调整为统一大小
-                    if target_size is not None:
-                        resized = cv2.resize(norm_slice, target_size, interpolation=cv2.INTER_AREA)
-                    else:
-                        resized = norm_slice
+                    #if target_size is not None:
+                    #    resized_global = cv2.resize(norm_slice_global, target_size, interpolation=cv2.INTER_AREA)
+                    #    resized_single = cv2.resize(norm_slice_single, target_size, interpolation=cv2.INTER_AREA)
+
+                    #else:
+                    #    resized_global = norm_slice_global
+                    #    resized_single = norm_slice_single
+
                     # 生成文件名并保存
                     savingfilename = f"{filename}_slice_{idx:02d}_ch_{name_channels[c]}.png"
-                    filepath = os.path.join(output_dir, savingfilename)
-                    cv2.imwrite(filepath, resized)
-                    print(f"保存: {filepath}")
+                    output_dir_c = os.path.join(output_dir, name_channels[c])
+                    output_dir_single = os.path.join(output_dir, name_channels[c],"single")
+                    filepath_global = os.path.join(output_dir_c, savingfilename)
+                    filepath_single = os.path.join(output_dir_single, savingfilename)
+                    cv2.imwrite(filepath_global, resized_global)
+                    cv2.imwrite(filepath_single, resized_single)
+                    print(f"Saved: {savingfilename}")
+                    # 加一个自动创建文件夹 暂时需要手动创建
+
+# 自身归一化的也需要，要作为DeepSlice的输入
                 
 '''
 # Example usage
