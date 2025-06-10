@@ -1,0 +1,1 @@
+/Users/stepviewmaifu/RESEARCH/Fu lab/3D test data/allen_100um_images/allen_100um_images_front_coordinate.npy
